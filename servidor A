@@ -1,0 +1,63 @@
+
+import java.io.*;
+import java.net.*;
+import java.util.*;
+
+public class ServidorA {
+
+    private static final int PORTA_CLIENTE = 5000;
+    private static final String HOST_LOCAL = "localhost";
+    private static final int PORTA_B = 5001;
+    private static final int PORTA_C = 5002;
+
+    public static void main(String[] args) {
+        System.out.println("Servidor A aguardando conexões do cliente na porta " + PORTA_CLIENTE);
+
+        try (ServerSocket serverSocket = new ServerSocket(PORTA_CLIENTE)) {
+            while (true) {
+                Socket clienteSocket = serverSocket.accept();
+                new Thread(() -> tratarCliente(clienteSocket)).start();
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private static void tratarCliente(Socket clienteSocket) {
+        try (
+            BufferedReader in = new BufferedReader(new InputStreamReader(clienteSocket.getInputStream()));
+            ObjectOutputStream out = new ObjectOutputStream(clienteSocket.getOutputStream());
+        ) {
+            String termoBusca = in.readLine();
+            System.out.println("[A] Termo recebido do cliente: " + termoBusca);
+
+            // Enviar para servidores B e C
+            List<Artigo> resultadosB = buscarEmServidor(PORTA_B, termoBusca);
+            List<Artigo> resultadosC = buscarEmServidor(PORTA_C, termoBusca);
+
+            // Juntar resultados
+            List<Artigo> todosResultados = new ArrayList<>();
+            todosResultados.addAll(resultadosB);
+            todosResultados.addAll(resultadosC);
+
+            // Responder ao cliente
+            out.writeObject(todosResultados);
+            System.out.println("[A] Resposta enviada ao cliente com " + todosResultados.size() + " artigos.");
+
+        } catch (IOException | ClassNotFoundException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private static List<Artigo> buscarEmServidor(int porta, String termo) throws IOException, ClassNotFoundException {
+        try (
+            Socket socket = new Socket(HOST_LOCAL, porta);
+            PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
+            ObjectInputStream in = new ObjectInputStream(socket.getInputStream());
+        ) {
+            out.println(termo);
+            Object obj = in.readObject();
+            return (List<Artigo>) obj;
+        }
+    }
+}
